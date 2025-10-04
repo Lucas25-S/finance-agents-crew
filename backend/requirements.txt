@@ -1,0 +1,8 @@
+crewai
+crewai_tools
+langchain
+yfinance
+fastapi
+uvicorn
+langchain-community
+langchain-google-genai

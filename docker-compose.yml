@@ -1,0 +1,31 @@
+services:
+  backend-api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    environment:
+      # Essas variáveis são carregadas do seu ambiente local (setx)
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - USER_AGENT=FinanceAgent/1.0
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    # Adiciona a verificação de saúde para garantir que o serviço esteja pronto
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  frontend-web:
+    build: ./frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/var/www/html
+    # Dependência agora espera que o backend esteja saudável
+    depends_on:
+      - backend-api
