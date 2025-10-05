@@ -1,0 +1,14 @@
+# .gitignore
+
+# Pastas de Ambiente Virtual (Python)
+/venv
+/backend/venv
+/frontend/venv
+
+# Pastas de Dependências (Laravel/PHP/Node)
+/vendor
+/frontend/vendor
+/frontend/node_modules
+
+# Arquivos de Variáveis de Ambiente
+.env
