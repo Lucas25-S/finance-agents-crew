@@ -11,7 +11,7 @@
         input[type="text"] { padding: 10px; margin: 1em 0; border: 1px solid #ccc; border-radius: 4px; width: 80%; max-width: 300px; }
         button { background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
         button:hover { background-color: #0056b3; }
-        #result { margin-top: 2em; padding: 1.5em; background-color: #e9ecef; border-radius: 8px; text-align: left; white-space: pre-wrap; word-wrap: break-word; }
+        #result { margin-top: 2em; padding: 1.5em; background-color: #e9ecef; border-radius: 8px; text-align: left; white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto;}
         .loading { display: none; }
     </style>
 </head>
