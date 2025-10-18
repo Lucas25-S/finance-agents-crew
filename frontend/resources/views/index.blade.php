@@ -47,12 +47,12 @@
 
                 // NOVO CÓDIGO DO JAVASCRIPT
                 if (response.ok) {
-                    // Se a resposta for 200 OK, exibe o conteúdo gerado
-                    resultDiv.innerText = data.message;
+                    // Se for sucesso, exibe a propriedade 'message' ou a resposta inteira
+                    resultDiv.innerText = data.message || JSON.stringify(data, null, 2);
                 } else {
-                    // Se o backend retornou um erro 500 ou outro erro, exibe a propriedade 'error'
-                    const errorMessage = data.error || 'Erro desconhecido. Consulte os logs do Docker.';
-                    resultDiv.innerText = 'ERRO DA IA: ' + errorMessage;
+                    // Se for erro, exibe a propriedade 'error' ou a resposta inteira formatada
+                    const errorMessage = data.error || data.message || JSON.stringify(data, null, 2);
+                    resultDiv.innerText = 'ERRO DE RESPOSTA: ' + errorMessage;
                 }
             } catch (error) {
                 resultDiv.innerText = 'Ocorreu um erro ao conectar com a API. Verifique se os servidores estão rodando.';
