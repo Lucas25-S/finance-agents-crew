@@ -1,8 +1,7 @@
 crewai
-crewai_tools
-langchain
-yfinance
+crewai-tools
 fastapi
 uvicorn
-langchain-community
+python-dotenv
+google-generativeai
 langchain-google-genai
