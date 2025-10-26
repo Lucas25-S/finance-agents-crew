@@ -14,7 +14,7 @@ litellm.set_verbose = False
 app = FastAPI()
 
 last_request_time = 0
-MIN_INTERVAL = 5
+MIN_INTERVAL = 30
 
 @app.get("/")
 def read_root():
