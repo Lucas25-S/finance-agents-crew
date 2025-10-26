@@ -2,15 +2,19 @@ from fastapi import FastAPI, Request
 import uvicorn
 import os
 import time
+import asyncio
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai_tools import SerperDevTool
 from dotenv import load_dotenv
+import litellm
+
+litellm.drop_params = True
+litellm.set_verbose = False
 
 app = FastAPI()
 
-# ✅ Variável global para controlar o tempo entre requisições
 last_request_time = 0
-MIN_INTERVAL = 20  # Segundos entre requisições
+MIN_INTERVAL = 5
 
 @app.get("/")
 def read_root():
@@ -20,12 +24,11 @@ def read_root():
 async def analyze_stock(request: Request):
     global last_request_time
     
-    # ✅ Verifica se precisa esperar
     time_since_last = time.time() - last_request_time
     if time_since_last < MIN_INTERVAL:
         wait_time = MIN_INTERVAL - time_since_last
         return {
-            "message": f"Aguarde {wait_time:.0f} segundos antes da próxima análise (limite da API gratuita).",
+            "message": f"Aguarde {wait_time:.0f} segundos.",
             "wait_seconds": int(wait_time)
         }, 429
     
@@ -37,86 +40,116 @@ async def analyze_stock(request: Request):
 
     try:
         load_dotenv()
-        
-        # Atualiza o timestamp
         last_request_time = time.time()
+        
+        os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
         
         llm = LLM(
             model="groq/llama-3.1-8b-instant",
-            api_key=os.getenv("GROQ_API_KEY")
+            api_key=os.getenv("GROQ_API_KEY"),
+            temperature=0.7
         )
 
         search_tool = SerperDevTool() 
 
-        # ✅ Agentes com descrições CURTAS
+        # AGENTE 1 - Júlia
         julia_agent = Agent(
-            role='Analista',
-            goal=f'Dados de {stock_symbol}',
-            backstory='Analista financeira.',
+            role='Coletora de Dados',
+            goal=f'Buscar cotação de {stock_symbol}',
+            backstory='Analista de dados.',
             tools=[search_tool],
             llm=llm,
-            allow_delegation=False
+            allow_delegation=False,
+            max_iter=2
         )
 
-        pedro_agent = Agent(
-            role='Sentimento',
-            goal=f'Notícias {stock_symbol}',
-            backstory='Analista de mercado.',
-            tools=[search_tool],
-            llm=llm,
-            allow_delegation=False
-        )
-
-        key_agent = Agent(
-            role='Redator',
-            goal=f'Relatório {stock_symbol}',
-            backstory='Jornalista.',
-            llm=llm,
-            allow_delegation=False
-        )
-
-        # ✅ Tarefas MUITO mais curtas
         task_julia = Task(
-            description=f'Cotação {stock_symbol}',
+            description=f'Busque apenas a cotação atual de {stock_symbol}',
             agent=julia_agent,
-            expected_output='Preço atual.'
+            expected_output='Preço atual da ação.'
+        )
+
+        crew_julia = Crew(
+            agents=[julia_agent],
+            tasks=[task_julia],
+            process=Process.sequential,
+            verbose=False,
+            memory=False
+        )
+        resultado_julia = crew_julia.kickoff()
+        
+        await asyncio.sleep(10)
+
+        # AGENTE 2 - Pedro
+        pedro_agent = Agent(
+            role='Analista de Sentimento',
+            goal=f'Analisar notícias sobre {stock_symbol}',
+            backstory='Especialista em mercado.',
+            tools=[search_tool],
+            llm=llm,
+            allow_delegation=False,
+            max_iter=2
         )
 
         task_pedro = Task(
-            description=f'Sentimento {stock_symbol}',
+            description=f'Analise o sentimento de mercado sobre {stock_symbol}',
             agent=pedro_agent,
-            expected_output='Positivo/negativo/neutro.'
+            expected_output='Sentimento: positivo, negativo ou neutro.'
+        )
+
+        crew_pedro = Crew(
+            agents=[pedro_agent],
+            tasks=[task_pedro],
+            process=Process.sequential,
+            verbose=False,
+            memory=False
+        )
+        resultado_pedro = crew_pedro.kickoff()
+        
+        await asyncio.sleep(10)
+
+        # AGENTE 3 - Key
+        key_agent = Agent(
+            role='Redator',
+            goal=f'Escrever relatório sobre {stock_symbol}',
+            backstory='Jornalista financeiro.',
+            llm=llm,
+            allow_delegation=False,
+            max_iter=2
         )
 
         task_key = Task(
-            description=f'Resumo {stock_symbol}',
+            description=f'Com base nos dados: {resultado_julia} e sentimento: {resultado_pedro}, escreva um relatório sobre {stock_symbol} com recomendação de compra/venda/manter',
             agent=key_agent,
-            expected_output='Análise breve com recomendação.'
+            expected_output='Relatório com recomendação clara.'
         )
 
-        stock_crew = Crew(
-            agents=[julia_agent, pedro_agent, key_agent],
-            tasks=[task_julia, task_pedro, task_key],
+        crew_key = Crew(
+            agents=[key_agent],
+            tasks=[task_key],
             process=Process.sequential,
             verbose=False,
-            memory=False  # ✅ Desliga memória pra economizar
+            memory=False
         )
+        resultado_final = crew_key.kickoff()
 
-        final_result = stock_crew.kickoff()
-
-        return {"message": str(final_result), "status": "success"}
+        return {
+            "message": str(resultado_final),
+            "dados": str(resultado_julia),
+            "sentimento": str(resultado_pedro),
+            "status": "success"
+        }
 
     except Exception as e:
         error_msg = str(e)
         
-        # ✅ Detecta rate limit e informa quanto tempo esperar
-        if "rate_limit_exceeded" in error_msg.lower():
+        if "rate_limit" in error_msg.lower():
             return {
-                "message": "Limite de requisições atingido. Aguarde 20 segundos.",
-                "wait_seconds": 20
+                "message": "Limite atingido. Tente novamente em 30 segundos.",
+                "wait_seconds": 30
             }, 429
         
-        return {"message": f"ERRO: {error_msg}"}, 200 
+        return {"message": f"ERRO: {error_msg}"}, 500
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

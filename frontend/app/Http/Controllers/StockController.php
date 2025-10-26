@@ -14,63 +14,80 @@ class StockController extends Controller
     public function analyze($symbol)
     {
         try {
-            // CORREÇÃO DA URL E TIMEOUT: Usa o nome do serviço 'backend-api' e aumenta o timeout
-            $response = Http::timeout(120)->post("http://backend-api:8000/analyze-stock", [
+            // ✅ Aumentei o timeout para 60 segundos (porque agora demora ~35-45s)
+            $response = Http::timeout(60)->post("http://backend-api:8000/analyze-stock", [
                 'stock_symbol' => $symbol,
             ]);
 
-            // Tenta obter o JSON retornado.
             $data = $response->json() ?? [];
             
-            // 1. Verifica se a resposta foi um erro HTTP ou se o backend retornou uma chave 'error'.
+            // Verifica se houve erro HTTP ou erro retornado pelo backend
             if ($response->failed() || isset($data['error'])) {
-                // Tenta pegar o erro do JSON, senão usa uma mensagem genérica de falha HTTP
                 $errorMessage = $data['error'] ?? 'Erro desconhecido ao processar no backend.';
                 return response()->json(['error' => $errorMessage], $response->status());
             }
 
-            // --- LÓGICA DE EXTRAÇÃO E FORMATAÇÃO ESTRUTURADA ---
+            // ✅ Verifica se precisa aguardar (erro 429 - rate limit)
+            if ($response->status() === 429) {
+                $waitSeconds = $data['wait_seconds'] ?? 30;
+                return response()->json([
+                    'error' => $data['message'] ?? 'Aguarde antes de fazer nova requisição.',
+                    'wait_seconds' => $waitSeconds
+                ], 429);
+            }
+
+            // --- NOVA ESTRUTURA DE RESPOSTA ---
             
             $formattedOutput = '';
-            $resultData = $data['message'] ?? $data; // Pega o conteúdo principal
-            $tasksOutput = $resultData['tasks_output'] ?? null;
             
-            if ($tasksOutput) {
-                // Itera sobre as tarefas para formatar a saída de cada agente
-                foreach ($tasksOutput as $task) {
-                    $agentName = $task['agent'] ?? 'Agente Desconhecido';
-                    $agentRawOutput = $task['raw'] ?? 'Nenhum conteúdo gerado.';
-
-                    // Adiciona o cabeçalho e o conteúdo formatado
-                    $formattedOutput .= "================================================\n";
-                    $formattedOutput .= "AGENTE: " . strtoupper($agentName) . "\n";
-                    $formattedOutput .= "================================================\n";
-                    $formattedOutput .= $agentRawOutput . "\n\n";
-                }
+            // ✅ A nova API retorna 'message', 'dados' e 'sentimento'
+            $mensagemFinal = $data['message'] ?? '';
+            $dados = $data['dados'] ?? '';
+            $sentimento = $data['sentimento'] ?? '';
+            
+            // Formata a saída estruturada
+            if ($dados) {
+                $formattedOutput .= "================================================\n";
+                $formattedOutput .= "DADOS FINANCEIROS (JÚLIA)\n";
+                $formattedOutput .= "================================================\n";
+                $formattedOutput .= $dados . "\n\n";
+            }
+            
+            if ($sentimento) {
+                $formattedOutput .= "================================================\n";
+                $formattedOutput .= "ANÁLISE DE SENTIMENTO (PEDRO)\n";
+                $formattedOutput .= "================================================\n";
+                $formattedOutput .= $sentimento . "\n\n";
+            }
+            
+            if ($mensagemFinal) {
+                $formattedOutput .= "================================================\n";
+                $formattedOutput .= "RELATÓRIO FINAL (KEY)\n";
+                $formattedOutput .= "================================================\n";
+                $formattedOutput .= $mensagemFinal . "\n\n";
+            }
+            
+            // Se não tiver estrutura, retorna o que vier
+            if (!$formattedOutput) {
+                $formattedOutput = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
             }
 
-            // Adiciona o resultado final do CrewAI (o artigo final da Key)
-            if (isset($resultData['raw'])) {
-                 $formattedOutput .= "================================================\n";
-                 $formattedOutput .= "REDAÇÃO FINAL (ARTIGO COMPLETO)\n";
-                 $formattedOutput .= "================================================\n";
-                 $formattedOutput .= $resultData['raw'] . "\n\n";
-            } else if (!$formattedOutput) {
-                // Caso o formato não seja o esperado (e não houve tasks), retorna o JSON para debug.
-                $formattedOutput = json_encode($resultData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            }
-
-            // CORREÇÃO FINAL: Retorna o JSON com a chave 'message' (com a string formatada)
-            // O JavaScript espera esta chave!
             return response()->json([
                 'message' => $formattedOutput,
-                // Opcional: Retorna os detalhes brutos para debug no console do navegador
-                'details' => $resultData
+                'status' => $data['status'] ?? 'success',
+                'details' => $data
             ], 200);
 
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            // Timeout ou erro de conexão
+            return response()->json([
+                'error' => 'Tempo de conexão esgotado. A análise pode demorar até 60 segundos.'
+            ], 504);
         } catch (\Exception $e) {
-            // Em caso de erro de rede ou timeout (cURL), retorna o erro.
-            return response()->json(['error' => $e->getMessage()], 500);
+            // Outros erros
+            return response()->json([
+                'error' => 'Erro ao conectar com o backend: ' . $e->getMessage()
+            ], 500);
         }
     }
 }
