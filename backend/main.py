@@ -7,6 +7,7 @@ from crewai import Agent, Task, Crew, Process, LLM
 from crewai_tools import SerperDevTool
 from dotenv import load_dotenv
 import litellm
+import traceback
 
 litellm.drop_params = True
 litellm.set_verbose = False
@@ -14,7 +15,7 @@ litellm.set_verbose = False
 app = FastAPI()
 
 last_request_time = 0
-MIN_INTERVAL = 30
+MIN_INTERVAL = 60
 
 @app.get("/")
 def read_root():
@@ -28,7 +29,7 @@ async def analyze_stock(request: Request):
     if time_since_last < MIN_INTERVAL:
         wait_time = MIN_INTERVAL - time_since_last
         return {
-            "message": f"Aguarde {wait_time:.0f} segundos.",
+            "message": f"Aguarde {wait_time:.0f} segundos antes da próxima análise.",
             "wait_seconds": int(wait_time)
         }, 429
     
@@ -42,31 +43,39 @@ async def analyze_stock(request: Request):
         load_dotenv()
         last_request_time = time.time()
         
-        os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
+        groq_key = os.getenv("GROQ_API_KEY")
+        
+        from groq import Groq
+        client = Groq(api_key=groq_key)
+        test = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": "OK"}],
+            max_tokens=5
+        )
         
         llm = LLM(
             model="groq/llama-3.1-8b-instant",
-            api_key=os.getenv("GROQ_API_KEY"),
+            api_key=groq_key,
             temperature=0.7
         )
 
         search_tool = SerperDevTool() 
 
-        # AGENTE 1 - Júlia
         julia_agent = Agent(
-            role='Coletora de Dados',
-            goal=f'Buscar cotação de {stock_symbol}',
-            backstory='Analista de dados.',
+            role='Analista de Dados Financeiros',
+            goal=f'Coletar cotação atual e dados fundamentais de {stock_symbol}',
+            backstory='Especialista em análise quantitativa e coleta de dados de mercado.',
             tools=[search_tool],
             llm=llm,
             allow_delegation=False,
-            max_iter=2
+            max_iter=2,
+            verbose=False
         )
 
         task_julia = Task(
-            description=f'Busque apenas a cotação atual de {stock_symbol}',
+            description=f'Busque e informe APENAS a cotação atual da ação {stock_symbol}. Seja breve e objetivo.',
             agent=julia_agent,
-            expected_output='Preço atual da ação.'
+            expected_output='Cotação atual da ação em formato: "Cotação: R$ XX.XX"'
         )
 
         crew_julia = Crew(
@@ -78,23 +87,23 @@ async def analyze_stock(request: Request):
         )
         resultado_julia = crew_julia.kickoff()
         
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
 
-        # AGENTE 2 - Pedro
         pedro_agent = Agent(
-            role='Analista de Sentimento',
-            goal=f'Analisar notícias sobre {stock_symbol}',
-            backstory='Especialista em mercado.',
+            role='Analista de Sentimento de Mercado',
+            goal=f'Avaliar o sentimento do mercado sobre {stock_symbol}',
+            backstory='Especialista em análise de notícias e percepção do mercado.',
             tools=[search_tool],
             llm=llm,
             allow_delegation=False,
-            max_iter=2
+            max_iter=2,
+            verbose=False
         )
 
         task_pedro = Task(
-            description=f'Analise o sentimento de mercado sobre {stock_symbol}',
+            description=f'Busque notícias recentes sobre {stock_symbol} e diga se são positivas ou negativas',
             agent=pedro_agent,
-            expected_output='Sentimento: positivo, negativo ou neutro.'
+            expected_output='Sentimento: positivo ou negativo com base nas notícias'
         )
 
         crew_pedro = Crew(
@@ -106,22 +115,37 @@ async def analyze_stock(request: Request):
         )
         resultado_pedro = crew_pedro.kickoff()
         
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
 
-        # AGENTE 3 - Key
         key_agent = Agent(
-            role='Redator',
-            goal=f'Escrever relatório sobre {stock_symbol}',
-            backstory='Jornalista financeiro.',
+            role='Analista e Redator Financeiro',
+            goal=f'Elaborar relatório final sobre {stock_symbol} com recomendação',
+            backstory='Jornalista financeiro experiente em transformar dados em insights acionáveis.',
             llm=llm,
             allow_delegation=False,
-            max_iter=2
+            max_iter=2,
+            verbose=False
         )
 
         task_key = Task(
-            description=f'Com base nos dados: {resultado_julia} e sentimento: {resultado_pedro}, escreva um relatório sobre {stock_symbol} com recomendação de compra/venda/manter',
+            description=f'''
+            Com base nas seguintes informações:
+            
+            DADOS FINANCEIROS (Júlia):
+            {resultado_julia}
+            
+            SENTIMENTO DE MERCADO (Pedro):
+            {resultado_pedro}
+            
+            Escreva um relatório estruturado sobre {stock_symbol} contendo:
+            1. Resumo dos dados
+            2. Análise do sentimento
+            3. Recomendação final: COMPRAR, VENDER ou MANTER
+            
+            Seja claro, objetivo e profissional.
+            ''',
             agent=key_agent,
-            expected_output='Relatório com recomendação clara.'
+            expected_output='Relatório estruturado com recomendação clara'
         )
 
         crew_key = Crew(
@@ -141,15 +165,13 @@ async def analyze_stock(request: Request):
         }
 
     except Exception as e:
-        error_msg = str(e)
-        
-        if "rate_limit" in error_msg.lower():
+        if "rate_limit" in str(e).lower():
             return {
-                "message": "Limite atingido. Tente novamente em 30 segundos.",
-                "wait_seconds": 30
+                "message": "Limite atingido. Aguarde 60 segundos.",
+                "wait_seconds": 60
             }, 429
         
-        return {"message": f"ERRO: {error_msg}"}, 500
+        return {"message": f"ERRO: {str(e)}"}, 500
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
