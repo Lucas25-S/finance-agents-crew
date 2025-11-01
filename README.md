@@ -71,7 +71,10 @@ MYSQL_ROOT_PASSWORD=sua_senha_root_segura
 MYSQL_DATABASE=finance_db
 MYSQL_USER=laravel_user
 MYSQL_PASSWORD=sua_senha_app_segura
-3. Configurar Conexão do Laravel (Frontend)
+```
+
+### 3. Configurar Conexão do Laravel (Frontend)
+
 Este é o passo mais crítico. O Laravel precisa saber como encontrar o contêiner do MySQL.
 
 Abra o arquivo frontend/.env e substitua as variáveis DB_ pelas seguintes (elas devem corresponder ao que você definiu no .env raiz):
@@ -79,29 +82,32 @@ Abra o arquivo frontend/.env e substitua as variáveis DB_ pelas seguintes (elas
 Snippet de código
 
 # frontend/.env
-
+```
 DB_CONNECTION=mysql
 DB_HOST=mysql
 DB_PORT=3306
 DB_DATABASE=finance_db
 DB_USERNAME=laravel_user
 DB_PASSWORD=sua_senha_app_segura
-4. Subir os Contêineres
+```
+## 4. Subir os Contêineres
 Execute o comando de build completo na pasta raiz. Isso irá construir as imagens, instalar as dependências (requirements.txt) e iniciar os três serviços.
 
-
+```
 docker-compose up -d --build --force-recreate
-5. Preparar o Banco de Dados (Migrações)
+```
+## 5. Preparar o Banco de Dados (Migrações)
 Após os contêineres estarem no ar, você deve criar as tabelas no banco de dados.
 
 Primeiro, crie a tabela de sessões (para evitar o erro 500):
-
-
+```
 docker-compose exec frontend-web php artisan session:table
+```
 Segundo, crie as tabelas do projeto (incluindo analyses):
-
-
+```
 docker-compose exec frontend-web php artisan migrate:fresh
+```
+
 🚀 Como Usar e Testar
 Teste 1: Fluxo de IA (CREATE)
 Acesse o Frontend: Abra o navegador em http://localhost:8080.
