@@ -1,16 +1,15 @@
-from fastapi import FastAPI, Request
+# main.py - ARQUITETURA FINAL (ASYNC/AWAIT + THREADPOOL CORRIGIDO)
+
+from fastapi import FastAPI, Request, HTTPException
 import uvicorn
 import os
 import time
-import asyncio
-from crewai import Agent, Task, Crew, Process, LLM
+import traceback
+from crewai import Agent, Task, Crew, Process
 from crewai_tools import SerperDevTool
 from dotenv import load_dotenv
-import litellm
-import traceback
-
-litellm.drop_params = True
-litellm.set_verbose = False
+from langchain_litellm import ChatLiteLLM
+from starlette.concurrency import run_in_threadpool # Importação correta
 
 app = FastAPI()
 
@@ -19,8 +18,9 @@ MIN_INTERVAL = 60
 
 @app.get("/")
 def read_root():
-    return {"message": "API de Agentes de IA está funcionando!"}
+    return {"message": "API funcionando!", "version": "3.0.0"}
 
+# 1. Endpoint 'async def' (Correto)
 @app.post("/analyze-stock")
 async def analyze_stock(request: Request):
     global last_request_time
@@ -28,150 +28,124 @@ async def analyze_stock(request: Request):
     time_since_last = time.time() - last_request_time
     if time_since_last < MIN_INTERVAL:
         wait_time = MIN_INTERVAL - time_since_last
-        return {
-            "message": f"Aguarde {wait_time:.0f} segundos antes da próxima análise.",
-            "wait_seconds": int(wait_time)
-        }, 429
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": f"Aguarde {wait_time:.0f} segundos.",
+                "wait_seconds": int(wait_time)
+            }
+        )
     
-    data = await request.json()
+    # 2. 'await' para ler o JSON (Correto)
+    data = await request.json() 
     stock_symbol = data.get('stock_symbol')
 
     if not stock_symbol:
-        return {"error": "O campo 'stock_symbol' é obrigatório."}, 400
+        raise HTTPException(status_code=400, detail="Campo obrigatório")
 
     try:
-        load_dotenv()
+        # 3. Define a função síncrona (bloqueante)
+        def run_crew_analysis():
+            load_dotenv(override=True) 
+            
+            google_api_key = os.getenv("GOOGLE_API_KEY")
+            if not google_api_key:
+                raise ValueError("GOOGLE_API_KEY não encontrada")
+            
+            llm = ChatLiteLLM(
+                model="gemini/gemini-2.5-flash",
+                temperature=0.7
+            )
+
+            search_tool = SerperDevTool(num_results=3)
+
+            # --- CRIAÇÃO DOS AGENTES ---
+            julia_agent = Agent(
+                role='Analista de Dados Financeiros',
+                goal=f'Coletar cotação e dados de {stock_symbol}',
+                backstory='Analista financeira especializada.',
+                tools=[search_tool],
+                llm=llm
+            )
+            pedro_agent = Agent(
+                role='Analista de Sentimento',
+                goal=f'Avaliar sentimento sobre {stock_symbol}',
+                backstory='Especialista em análise de notícias.',
+                tools=[search_tool],
+                llm=llm
+            )
+            key_agent = Agent(
+                role='Redator Financeiro',
+                goal=f'Escrever relatório sobre {stock_symbol}',
+                backstory='Jornalista financeiro experiente.',
+                llm=llm
+            )
+
+            # --- DEFINIÇÃO DAS TAREFAS ---
+            task_julia = Task(
+                description=f'Busque e informe a cotação atual, receita e lucro líquido de {stock_symbol}',
+                agent=julia_agent,
+                expected_output='Resumo de dados financeiros'
+            )
+            task_pedro = Task(
+                description=f'Busque notícias recentes sobre {stock_symbol} e classifique o sentimento (positivo/negativo/neutro)',
+                agent=pedro_agent,
+                expected_output='Relatório de sentimento',
+                context=[task_julia]
+            )
+            task_key = Task(
+                description=f'''
+                Com base nos DADOS FINANCEIROS (Tarefa 1) e na ANÁLISE DE SENTIMENTO (Tarefa 2),
+                escreva um relatório profissional sobre {stock_symbol} com:
+                1. Resumo dos dados
+                2. Análise do sentimento
+                3. Recomendação: COMPRAR, VENDER ou MANTER
+                ''',
+                agent=key_agent,
+                expected_output='Relatório estruturado',
+                context=[task_julia, task_pedro]
+            )
+
+            # --- CRIAÇÃO DO CREW ÚNICO ---
+            stock_crew = Crew(
+                agents=[julia_agent, pedro_agent, key_agent],
+                tasks=[task_julia, task_pedro, task_key],
+                process=Process.sequential,
+                memory=False
+            )
+            
+            resultado_final = stock_crew.kickoff()
+
+            # Extrai os resultados individuais (Corrigido para .raw)
+            resultado_julia = task_julia.output.raw if task_julia.output else "Dados de Júlia não coletados."
+            resultado_pedro = task_pedro.output.raw if task_pedro.output else "Sentimento de Pedro não analisado."
+
+            # 4. CORREÇÃO: O 'return' deve estar DENTRO da função síncrona
+            return {
+                "message": str(resultado_final) if resultado_final else "Análise não concluída",
+                "dados": str(resultado_julia),
+                "sentimento": str(resultado_pedro),
+                "status": "success"
+            }
+
+        # 5. CORREÇÃO: Executa a função síncrona no threadpool
+        result_data = await run_in_threadpool(run_crew_analysis)
+        
+        # Atualiza o tempo DEPOIS que a tarefa terminar
         last_request_time = time.time()
         
-        groq_key = os.getenv("GROQ_API_KEY")
-        
-        from groq import Groq
-        client = Groq(api_key=groq_key)
-        test = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": "OK"}],
-            max_tokens=5
-        )
-        
-        llm = LLM(
-            model="groq/llama-3.1-8b-instant",
-            api_key=groq_key,
-            temperature=0.7
-        )
-
-        search_tool = SerperDevTool() 
-
-        julia_agent = Agent(
-            role='Analista de Dados Financeiros',
-            goal=f'Coletar cotação atual e dados fundamentais de {stock_symbol}',
-            backstory='Especialista em análise quantitativa e coleta de dados de mercado.',
-            tools=[search_tool],
-            llm=llm,
-            allow_delegation=False,
-            max_iter=2,
-            verbose=False
-        )
-
-        task_julia = Task(
-            description=f'Busque e informe APENAS a cotação atual da ação {stock_symbol}. Seja breve e objetivo.',
-            agent=julia_agent,
-            expected_output='Cotação atual da ação em formato: "Cotação: R$ XX.XX"'
-        )
-
-        crew_julia = Crew(
-            agents=[julia_agent],
-            tasks=[task_julia],
-            process=Process.sequential,
-            verbose=False,
-            memory=False
-        )
-        resultado_julia = crew_julia.kickoff()
-        
-        await asyncio.sleep(15)
-
-        pedro_agent = Agent(
-            role='Analista de Sentimento de Mercado',
-            goal=f'Avaliar o sentimento do mercado sobre {stock_symbol}',
-            backstory='Especialista em análise de notícias e percepção do mercado.',
-            tools=[search_tool],
-            llm=llm,
-            allow_delegation=False,
-            max_iter=2,
-            verbose=False
-        )
-
-        task_pedro = Task(
-            description=f'Busque notícias recentes sobre {stock_symbol} e diga se são positivas ou negativas',
-            agent=pedro_agent,
-            expected_output='Sentimento: positivo ou negativo com base nas notícias'
-        )
-
-        crew_pedro = Crew(
-            agents=[pedro_agent],
-            tasks=[task_pedro],
-            process=Process.sequential,
-            verbose=False,
-            memory=False
-        )
-        resultado_pedro = crew_pedro.kickoff()
-        
-        await asyncio.sleep(15)
-
-        key_agent = Agent(
-            role='Analista e Redator Financeiro',
-            goal=f'Elaborar relatório final sobre {stock_symbol} com recomendação',
-            backstory='Jornalista financeiro experiente em transformar dados em insights acionáveis.',
-            llm=llm,
-            allow_delegation=False,
-            max_iter=2,
-            verbose=False
-        )
-
-        task_key = Task(
-            description=f'''
-            Com base nas seguintes informações:
-            
-            DADOS FINANCEIROS (Júlia):
-            {resultado_julia}
-            
-            SENTIMENTO DE MERCADO (Pedro):
-            {resultado_pedro}
-            
-            Escreva um relatório estruturado sobre {stock_symbol} contendo:
-            1. Resumo dos dados
-            2. Análise do sentimento
-            3. Recomendação final: COMPRAR, VENDER ou MANTER
-            
-            Seja claro, objetivo e profissional.
-            ''',
-            agent=key_agent,
-            expected_output='Relatório estruturado com recomendação clara'
-        )
-
-        crew_key = Crew(
-            agents=[key_agent],
-            tasks=[task_key],
-            process=Process.sequential,
-            verbose=False,
-            memory=False
-        )
-        resultado_final = crew_key.kickoff()
-
-        return {
-            "message": str(resultado_final),
-            "dados": str(resultado_julia),
-            "sentimento": str(resultado_pedro),
-            "status": "success"
-        }
+        # 6. CORREÇÃO: Retorna o resultado da função
+        return result_data
 
     except Exception as e:
-        if "rate_limit" in str(e).lower():
-            return {
-                "message": "Limite atingido. Aguarde 60 segundos.",
-                "wait_seconds": 60
-            }, 429
+        error_message = str(e)
+        print(f"ERRO: {error_message}")
+        traceback.print_exc()
         
-        return {"message": f"ERRO: {str(e)}"}, 500
+        if "rate_limit" in error_message.lower() or "quota" in error_message.lower():
+             raise HTTPException(status_code=429, detail={"message": "Limite atingido. Aguarde 60 segundos.", "wait_seconds": 60})
+        
+        raise HTTPException(status_code=500, detail=f"ERRO INTERNO: {error_message}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

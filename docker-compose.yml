@@ -1,6 +1,7 @@
 services:
   backend-api:
     build: ./backend
+    container_name: finance-backend  # ✅ Adicione nome
     ports:
       - "8000:8000"
     volumes:
@@ -11,13 +12,42 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - SERPER_API_KEY=${SERPER_API_KEY}
     command: uvicorn main:app --host 0.0.0.0 --port 8000
-    # O healthcheck deve ser removido, pois estava causando o erro "unhealthy"
+    networks:  # ✅ ADICIONE ISSO
+      - finance-network
 
-  frontend-web: # <-- Use este nome de serviço consistente
-    build: ./frontend # <-- O Caminho CORRETO para a sua pasta
+  frontend-web:
+    build: ./frontend
+    container_name: finance-frontend  # ✅ Adicione nome
     ports:
-      - "8080:80" # Porta acessível
+      - "8080:80"
     volumes:
-      - ./frontend:/var/www/html # Volume para o caminho correto
+      - ./frontend:/var/www/html
     depends_on:
       - backend-api
+      - mysql
+    networks:  # ✅ ADICIONE ISSO
+      - finance-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: finance_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:  # ✅ ADICIONE ISSO
+      - finance-network
+
+volumes:
+  dbdata:
+
+# ✅ ADICIONE ESTA SEÇÃO COMPLETA
+networks:
+  finance-network:
+    driver: bridge

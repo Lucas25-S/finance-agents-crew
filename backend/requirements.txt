@@ -1,7 +1,13 @@
-crewai
-crewai-tools
+# backend/requirements.txt
+
 fastapi
 uvicorn
 python-dotenv
-litellm
-groq
+crewai-tools
+langchain-litellm
+
+# CORREÇÃO: Instala o CrewAI com os pacotes extras do Google
+crewai[google-genai] 
+
+# Dependências que o Google pode precisar (se já não estiverem)
+langchain-google-genai
