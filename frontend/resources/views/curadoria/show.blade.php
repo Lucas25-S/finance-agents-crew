@@ -143,7 +143,7 @@
             white-space: pre-wrap; 
             line-height: 1.75;
             font-size: 1rem;
-            background-color: var(--bg-color); /* Usando o fundo para a área de conteúdo */
+            background-color: var(--bg-color); 
             border: 1px solid var(--border-color);
             padding: 25px;
             border-radius: 10px;
@@ -252,7 +252,6 @@
 
     <script>
         const body = document.body;
-        // Adicionando suporte básico ao Dark Mode
         const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const savedTheme = localStorage.getItem('theme');
 
@@ -260,7 +259,6 @@
             body.classList.add('dark');
         }
         
-        // Se precisar de um toggle manual, adicione o HTML do switch e esta função.
         /*
         function toggleTheme() {
             body.classList.toggle('dark');
