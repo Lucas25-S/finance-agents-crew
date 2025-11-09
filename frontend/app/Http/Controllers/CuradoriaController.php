@@ -13,7 +13,7 @@ class CuradoriaController extends Controller
     public function index()
     {
         // O READ (R do CRUD)
-        $analyses = Analysis::where('status', 'AGUARDANDO')->get();
+        $analyses = Analysis::all();
         // Retorna para uma view que você criaria (curadoria/index.blade.php)
         return view('curadoria.index', compact('analyses')); 
     }
@@ -54,4 +54,6 @@ class CuradoriaController extends Controller
         Analysis::destroy($id);
         return redirect()->route('curadoria.index')->with('success', 'Análise deletada com sucesso.');
     }
+
+    
 }

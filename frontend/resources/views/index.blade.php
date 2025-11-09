@@ -4,26 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análise de Ações com IA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         /* ====== RESET E VARIÁVEIS DE TEMA ====== */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: "Inter", system-ui, -apple-system, sans-serif;
+            font-family: 'Poppins', "Inter", system-ui, -apple-system, sans-serif;
         }
 
-        /* Padrão: TEMA CLARO */
+        /* Padrão: LIGHT MODE */
         body {
             --bg-color: #f0f2f5; 
-            --text-color: #222;
+            --text-color: #df1e26;
+            --text-input: #2d2d2e;
+            --subtext-color: #2d2d2e;
             --card-bg: #ffffff; 
             --input-bg: #e9ecef;
-            --accent: #007bff;
-            --button-hover: #0062cc;
-            --toggle-bg: #d6d6d6;
-            --toggle-icon-light: #222; 
-            --toggle-icon-dark: #fff;
+            --accent: #df1e26;
+            --button-hover: #feb408;
+            --switch-w: 60px;
+            --switch-h: 30px;
+            --circle-size: 24px;
             
             background-color: var(--bg-color);
             color: var(--text-color);
@@ -36,15 +40,16 @@
             transition: background-color 0.4s ease, color 0.4s ease;
         }
 
-        /* TEMA ESCURO */
+        /* DARK MODE */
         body.dark {
             --bg-color: #1a1b1e;
-            --text-color: #e3e3e3;
+            --text-color: #2d54a4;
+            --subtext-color: #dbd9d9;
+            --text-input: #ffffff;
             --card-bg: #292a2d;
             --input-bg: #35363a; 
             --accent: #0d6efd;
-            --button-hover: #0a58ca;
-            --toggle-bg: #3c4043;
+            --button-hover: #01ae47;
         }
 
         /* ====== CONTAINER PRINCIPAL ====== */
@@ -65,19 +70,26 @@
         
         .header h1 {
             font-size: 2em;
-            font-weight: 600;
-            color: var(--text-color);
+            font-weight: 700;
+            color: var(--accent); 
         }
         
         .header p {
-            color: var(--text-color);
-            opacity: 0.7;
+            color: var(--subtext-color);
+            opacity: 1;
             font-size: 1rem;
             margin-top: 5px;
         }
 
+        .header .logo {
+            display: block;
+            margin: 50px auto 50px; 
+            max-width: 250px;    
+            height: auto;        
+        }
+
         /* ================================== */
-        /* ✅ ESTILO DO LINK DE CURADORIA 
+        /* ✅ ESTILO DO LINK DE CURADORIA */
         /* ================================== */
         .curadoria-link {
             margin-top: 25px;
@@ -85,25 +97,28 @@
             background-color: var(--input-bg);
             border-radius: 8px;
             display: inline-block;
+            transition: background-color 0.3s ease;
         }
         .curadoria-link a {
             color: var(--accent);
             text-decoration: none;
             font-weight: 600;
             font-size: 0.95rem;
+            transition: color 0.3s ease;
         }
         .curadoria-link a:hover {
             text-decoration: underline;
+            color: var(--button-hover);
         }
         /* ================================== */
 
-        /* ====== CAIXA DE RESULTADO ====== */
+        /* ====== CAIXA DE RESULTADO (Resultado das Análises) ====== */
         .result-box {
             background-color: var(--card-bg);
             border-radius: 12px;
             padding: 1.5rem;
             margin-bottom: 20px;
-            color: var(--text-color);
+            color: var(--text-input);
             font-size: 0.95rem;
             line-height: 1.6;
             white-space: pre-wrap;
@@ -112,6 +127,11 @@
             opacity: 0;
             transform: translateY(10px);
             transition: all 0.4s ease-out;
+            border: 1px solid #eee; /* Borda sutil */
+        }
+        
+        body.dark .result-box {
+            border: 1px solid #35363a;
         }
         
         .result-box.visible {
@@ -126,7 +146,7 @@
         }
 
         .result-box .error-message {
-            color: #dc3545;
+            color: var(--accent); /* Usando a cor de destaque para consistência */
         }
 
         .result-box .wait-message {
@@ -135,6 +155,13 @@
             padding: 10px;
             border-radius: 8px;
             margin-top: 10px;
+        }
+        
+        body.dark .result-box .error-message {
+            color: #dc3545;
+        }
+        body.dark .result-box .wait-message {
+            background-color: rgba(255, 152, 0, 0.2);
         }
 
         .loading-dots {
@@ -173,6 +200,12 @@
             border: 1px solid var(--input-bg); 
             transition: all 0.3s;
         }
+
+        .center-input {
+            margin: 0 auto;
+            margin-top: 30px;
+            position: relative;
+        }
         
         .input-group:focus-within {
             border-color: var(--accent);
@@ -184,13 +217,13 @@
             padding: 12px 20px;
             border: none;
             background: transparent;
-            color: var(--text-color);
+            color: var(--text-input);
             font-size: 1rem;
             outline: none;
         }
 
         input::placeholder {
-            color: var(--text-color);
+            color: var(--text-input);
             opacity: 0.5;
         }
 
@@ -215,91 +248,111 @@
             cursor: not-allowed;
         }
 
-        /* ====== TOGGLE SWITCH ====== */
+        /* ====== NOVO ESTILO TOGGLE SWITCH (Copiado do Painel de Curadoria) ====== */
         .theme-switch {
-            --switch-w: 64px;
-            --switch-h: 34px;
-            --circle-size: 26px;
             width: var(--switch-w);
             height: var(--switch-h);
             position: fixed; 
             top: 20px;
             right: 20px;
-            background: var(--toggle-bg);
+            background: #d6d6d6;
             border-radius: 999px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
             cursor: pointer;
             transition: background-color 0.3s ease;
             z-index: 200;
+            
+            /* Novo alinhamento interno para os ícones */
+            display: flex;
+            align-items: center;
+            padding: 0 3px;
         }
-
-        .theme-switch .icon {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 16px;
-            height: 16px;
-            fill: var(--toggle-icon-light); 
-            z-index: 3;
-            pointer-events: none;
-            transition: fill 0.25s ease, opacity 0.25s ease;
-        }
-
-        .theme-switch .moon { left: 8px; }
-        .theme-switch .sun  { right: 8px; }
 
         .theme-switch .switch-circle {
             position: absolute;
-            top: 4px;
-            left: 4px;
+            top: 3px; /* Ajustado para 3px para caber no 30px de altura */
+            left: 3px;
             width: var(--circle-size);
             height: var(--circle-size);
             background: white;
             border-radius: 50%;
             z-index: 2;
             transition: left 0.35s cubic-bezier(.4,0,.2,1), background 0.25s ease;
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Estilos dos Ícones Font Awesome */
+        .theme-switch i {
+            font-size: 16px;
+            position: absolute;
+            z-index: 3;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        
+        /* Posição e Cor dos Ícones no Light Mode */
+        .theme-switch .fa-sun {
+            left: 8px;
+            color: #ffc107; 
+            opacity: 1;
+        }
+        .theme-switch .fa-moon {
+            right: 8px;
+            color: var(--text-color-primary);
+            opacity: 0;
+            transform: scale(0.8);
         }
 
-        body:not(.dark) .theme-switch .moon { opacity: 1; fill: var(--toggle-icon-light); }
-        body:not(.dark) .theme-switch .sun  { opacity: 0.5; }
+        /* Posição e Cor dos Ícones no Dark Mode */
+        body.dark .theme-switch {
+            background: #3c4043;
+        }
         
         body.dark .theme-switch .switch-circle {
-            left: calc(100% - var(--circle-size) - 4px);
-            background: var(--accent);
+            left: calc(100% - var(--circle-size) - 3px);
+            background: var(--accent); 
         }
-        body.dark .theme-switch .moon { opacity: 0.5; }
-        body.dark .theme-switch .sun  { opacity: 1; fill: var(--toggle-icon-dark); }
+        
+        body.dark .theme-switch .fa-sun {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+        
+        body.dark .theme-switch .fa-moon {
+            opacity: 1;
+            transform: scale(1);
+            color: #ffffff;
+        }
     </style>
 </head>
 
 <body>
     <div class="theme-switch" id="themeToggle" role="button" tabindex="0">
-        <svg class="icon moon" viewBox="0 0 24 24"><path d="M21.64 13a9 9 0 01-9.64 9 9 9 0 010-18 9.13 9.13 0 012.84.45 7 7 0 006.8 8.55z"/></svg>
-        <svg class="icon sun" viewBox="0 0 24 24"><path d="M12 18a6 6 0 100-12 6 6 0 000 12zM12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <i class="fas fa-sun"></i>
+        <i class="fas fa-moon"></i>
         <div class="switch-circle"></div>
     </div>
 
     <div class="app-container">
         <div class="header">
+            <div>
+                <img src="{{ asset('img/logo_jc.png') }}" alt="Logo JC" class="logo" />
+            </div>
+            
             <h1>Análise de Ações com IA</h1>
             <p>Insira o símbolo de uma ação abaixo para iniciar a análise.</p>
-            
+
             <div class="curadoria-link">
-                <a href="{{ route('curadoria.index') }}">
-                    🚀 Ir para o Painel de Curadoria (Revisão Humana)
-                </a>
+                <a href="{{ route('curadoria.index') }}"><i class="fas fa-rocket"></i> Ir para o Painel de Curadoria</a>
             </div>
+
+            <div class="input-group center-input">
+                <input id="stockInput" type="text" placeholder="Ex: PETR4, VALE3, MGLU3...">
+                <button id="analyzeBtn">Analisar</button>
             </div>
+
+        </div>
 
         <div id="resultsContainer"></div>
-    </div>
-
-    <div class="input-bar">
-        <div class="input-group">
-            <input id="stockInput" type="text" placeholder="Ex: PETR4, VALE3, MGLU3..." />
-            <button id="analyzeBtn">Analisar</button>
-        </div>
     </div>
 
     <script>
@@ -313,13 +366,26 @@
     const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const savedTheme = localStorage.getItem('theme');
 
-    if (savedTheme === 'dark' || (savedTheme === null && isSystemDark)) {
-        body.classList.add('dark');
+    const applyTheme = (theme) => {
+        if (theme === 'dark') {
+            body.classList.add('dark');
+        } else {
+            body.classList.remove('dark');
+        }
+    };
+    
+    if (savedTheme) {
+        applyTheme(savedTheme);
+    } else if (isSystemDark) {
+        applyTheme('dark');
+    } else {
+        applyTheme('light');
     }
 
     function toggleTheme() {
-        body.classList.toggle('dark');
-        localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
+        const newTheme = body.classList.contains('dark') ? 'light' : 'dark';
+        applyTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
     }
     
     themeToggle.addEventListener('click', toggleTheme);
@@ -362,31 +428,26 @@
             return;
         }
 
-        // Cria caixa de loading
         const loadingBox = createResultBox(symbol, `🔍 Analisando ${symbol}<span class="loading-dots">...</span><br><small>Isso pode levar até 60 segundos</small>`);
 
         analyzeBtn.disabled = true; 
         stockInput.value = '';
 
         try {
-            // ✅ CHAMADA REAL PARA SUA API
             const response = await fetch(`/analyze/${symbol}`);
             const data = await response.json();
 
             if (response.ok) {
-                // Sucesso - formata a resposta
                 let formattedMessage = data.message || JSON.stringify(data, null, 2);
                 
-                // Adiciona formatação básica (Markdown para HTML)
                 formattedMessage = formattedMessage
-                    .replace(/================================================/g, '<hr style="border: 1px dashed #ccc; margin: 15px 0;">') // Substitui linhas por HR
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Negrito
-                    .replace(/\n/g, '<br>'); // Quebras de linha
+                    .replace(/================================================/g, '<hr style="border: 1px dashed #ccc; margin: 15px 0;">')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\n/g, '<br>');
                 
                 loadingBox.querySelector('div').innerHTML = formattedMessage;
                 
             } else if (response.status === 429) {
-                // Rate limit
                 const waitSeconds = data.wait_seconds || 30;
                 loadingBox.querySelector('div').innerHTML = `
                     <div class="wait-message">
@@ -395,7 +456,6 @@
                     </div>
                 `;
             } else {
-                // Erro
                 const errorMessage = data.error || data.message || 'Erro desconhecido';
                 loadingBox.querySelector('div').innerHTML = `<span class="error-message">❌ ERRO: ${errorMessage}</span>`;
             }

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('index');
-});
+})->name('index'); // <- adicionando o nome
 
 Route::get('/analyze/{symbol}', [StockController::class, 'analyze']);
 
