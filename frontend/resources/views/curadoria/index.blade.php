@@ -168,7 +168,7 @@
         
         body.dark .theme-switch .switch-circle {
             left: calc(100% - var(--circle-size) - 3px);
-            background: #df1e26; 
+            background: #0d6efd; 
         }
         
         body.dark .theme-switch .fa-sun {
