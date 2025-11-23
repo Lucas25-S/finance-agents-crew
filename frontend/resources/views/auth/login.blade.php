@@ -298,7 +298,7 @@
 
         @if ($errors->any())
             @foreach ($errors->all() as $error)
-                <span class="error-message">❌ {{ $error }}</span>
+                <span class="error-message"> {{ $error }}</span>
             @endforeach
         @endif
 
