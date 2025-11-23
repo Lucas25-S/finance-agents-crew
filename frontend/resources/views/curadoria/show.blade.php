@@ -236,9 +236,6 @@
                     <button type="submit" name="status" value="REJEITADO" class="btn btn-danger"><i class="fas fa-times"></i> Rejeitar</button>
                 </form>
                 @else
-                <p style="font-weight: 600; color: var(--text-color-primary);">
-                    Análise **{{ $analysis->status }}**. Ações de status finalizadas.
-                </p>
                 @endif
             </div>
 
